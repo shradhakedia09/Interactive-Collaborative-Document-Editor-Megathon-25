@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Document Manager</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f0f0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    position: relative;
+  }
+
+  #displayContainer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-evenly;
+    align-items: center;
+    width: 90%;
+    max-width: 1200px;
+    gap: 30px;
+  }
+
+  .box {
+    background: white;
+    border-radius: 15px;
+    width: 220px;
+    height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    font-size: 22px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+    transition: transform 0.2s, box-shadow 0.2s;
+    text-align: center;
+    padding: 10px;
+  }
+
+  .box:hover {
+    transform: scale(1.05);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+  }
+
+  /* Profile and notifications */
+  #profileContainer {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  #notificationBell {
+    position: relative;
+    font-size: 28px;
+    cursor: pointer;
+  }
+
+  #notificationCount {
+    position: absolute;
+    top: -6px;
+    right: -10px;
+    background: red;
+    color: white;
+    font-size: 14px;
+    font-weight: bold;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  #profileCircle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #007bff;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    cursor: pointer;
+    position: relative;
+  }
+
+  #profileDropdown {
+    position: absolute;
+    top: 60px;
+    right: 0;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    display: none;
+    flex-direction: column;
+    min-width: 160px;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+    z-index: 100;
+  }
+
+  #profileDropdown button {
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 16px;
+    width: 100%;
+  }
+
+  #profileDropdown button:hover {
+    background: #f0f0f0;
+  }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .box {
+      width: 45%;
+      margin-bottom: 20px;
+    }
+  }
+
+  @media (max-width: 500px) {
+    .box {
+      width: 90%;
+    }
+    #profileContainer {
+      top: 10px;
+      right: 10px;
+    }
+  }
+
+  /* Popups */
+  .popupOverlay {
+    display: none;
+    position: fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background: rgba(0,0,0,0.5);
+    justify-content:center;
+    align-items:center;
+    z-index: 200;
+  }
+
+  .popupContent {
+    background:white;
+    padding:20px;
+    border-radius:15px;
+    display:flex;
+    flex-direction:column;
+    gap:15px;
+    min-width:300px;
+  }
+
+  .popupContent .box {
+    width: 100%;
+    height: 100px;
+  }
+
+  #codePopup select {
+    width: 100%;
+    padding: 5px;
+    margin-top: 5px;
+  }
+
+  #codePopup button {
+    margin-top:10px;
+    padding:5px 10px;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<!-- Profile & Notifications -->
+<div id="profileContainer">
+  <div id="notificationBell">
+    🔔
+    <div id="notificationCount">3</div>
+  </div>
+  <div id="profileCircle">U
+    <div id="profileDropdown">
+      <button id="signInBtn">Sign In</button>
+      <button id="createAccountBtn">Create Account</button>
+      <button id="signOutBtn" style="display:none;">Sign Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main Display Boxes -->
+<div id="displayContainer">
+  <div class="box" onclick="openTypePopup()">📄 Create New Document</div>
+  <div class="box" onclick="enterAccessCode()">🔑 Enter Access Code</div>
+  <div class="box" onclick="viewDocuments()">📂 View My Documents</div>
+  <div class="box" onclick="revokeCode()">🛑 Revoke Code</div>
+  <div class="box" onclick="quit()">❌ Quit</div>
+</div>
+
+<!-- Type Selection Popup -->
+<div id="typePopup" class="popupOverlay">
+  <div class="popupContent">
+    <div style="font-weight:bold; font-size:20px; text-align:center;">Select Document Type</div>
+    <div style="display:flex; gap:10px; justify-content:center;">
+      <div class="box" onclick="selectType('General')">General</div>
+      <div class="box" onclick="selectType('Hierarchy')">Hierarchy</div>
+    </div>
+    <div style="text-align:center;">
+      <button onclick="typePopup.style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Code Popup -->
+<div id="codePopup" class="popupOverlay">
+  <div class="popupContent">
+    <div id="popupTypeTitle" style="font-weight:bold; font-size:20px; text-align:center;">Code Options</div>
+    <div style="display:flex; justify-content:space-around; gap:10px;">
+      <div id="viewCodeBtn" class="box" style="flex:1; cursor:pointer;">View Code</div>
+      <div id="editCodeBtn" class="box" style="flex:1; cursor:pointer;">Edit Code</div>
+    </div>
+    <div id="hierarchySelectContainer" style="display:none; margin-top:10px;">
+      <label>Select Hierarchy:</label>
+      <select id="hierSelect"></select>
+    </div>
+    <div style="text-align:center;">
+      <button onclick="codePopup.style.display='none'">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------------- Box Functions ----------------
+  function enterAccessCode() {
+    const code = prompt("Enter your access code:");
+    if (code) alert("Access code entered: " + code);
+  }
+
+  function viewDocuments() {
+    alert("Showing your documents (coming soon)");
+  }
+
+  function revokeCode() {
+    const code = prompt("Enter code to revoke:");
+    if (code) alert("Revoked access for code: " + code);
+  }
+
+  function quit() {
+    if (confirm("Are you sure you want to quit?")) {
+      document.body.innerHTML = '';
+      const goodbye = document.createElement('div');
+      goodbye.textContent = 'Goodbye!';
+      goodbye.style.fontSize = '60px';
+      goodbye.style.fontWeight = 'bold';
+      goodbye.style.color = '#007bff';
+      goodbye.style.display = 'flex';
+      goodbye.style.justifyContent = 'center';
+      goodbye.style.alignItems = 'center';
+      goodbye.style.height = '100vh';
+      document.body.appendChild(goodbye);
+    }
+  }
+
+  // ---------------- Profile Dropdown ----------------
+  const profileCircle = document.getElementById('profileCircle');
+  const profileDropdown = document.getElementById('profileDropdown');
+  let loggedIn = false;
+
+  profileCircle.addEventListener('click', () => {
+    profileDropdown.style.display = profileDropdown.style.display === 'flex' ? 'none' : 'flex';
+  });
+
+  document.getElementById('signInBtn').addEventListener('click', () => {
+    const user = prompt("Enter username:");
+    if (user) {
+      alert(`Signed in as ${user}`);
+      loggedIn = true;
+      document.getElementById('signInBtn').style.display = 'none';
+      document.getElementById('createAccountBtn').style.display = 'none';
+      document.getElementById('signOutBtn').style.display = 'block';
+      profileCircle.textContent = user[0].toUpperCase();
+      profileDropdown.style.display = 'none';
+    }
+  });
+
+  document.getElementById('createAccountBtn').addEventListener('click', () => {
+    const user = prompt("Enter new username:");
+    if (user) alert(`Account created for ${user}`);
+    profileDropdown.style.display = 'none';
+  });
+
+  document.getElementById('signOutBtn').addEventListener('click', () => {
+    alert("Signed out");
+    loggedIn = false;
+    document.getElementById('signInBtn').style.display = 'block';
+    document.getElementById('createAccountBtn').style.display = 'block';
+    document.getElementById('signOutBtn').style.display = 'none';
+    profileCircle.textContent = 'U';
+    profileDropdown.style.display = 'none';
+  });
+
+  // ---------------- Notification Bell ----------------
+  const notificationBell = document.getElementById('notificationBell');
+  notificationBell.addEventListener('click', () => {
+    alert("You have 3 notifications (demo)");
+  });
+
+  // ---------------- Hierarchy Dropdown Populate ----------------
+  const hierSelect = document.getElementById('hierSelect');
+  for (let i = 1; i <= 200; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i;
+    hierSelect.appendChild(opt);
+  }
+
+  // ---------------- Create New Document ----------------
+  const typePopup = document.getElementById('typePopup');
+  const codePopup = document.getElementById('codePopup');
+
+  function openTypePopup() {
+    typePopup.style.display = 'flex';
+  }
+
+  function selectType(type) {
+    typePopup.style.display = 'none';
+    document.getElementById('popupTypeTitle').textContent = type + " Code Options";
+    document.getElementById('hierarchySelectContainer').style.display = (type === 'Hierarchy') ? 'block' : 'none';
+    setCodeButtons(type);
+    codePopup.style.display = 'flex';
+  }
+
+  // ---------------- Code Buttons & Generation ----------------
+  function setCodeButtons(type) {
+    document.getElementById('viewCodeBtn').onclick = () => {
+        const code = generateCode(type);
+        alert('Auto-generated Code:\n' + code);
+        shareCodePrompt(code);
+        codePopup.style.display = 'none';
+    };
+    document.getElementById('editCodeBtn').onclick = () => {
+        const code = generateCode(type);
+        alert('Editing Code:\n' + code);
+        shareCodePrompt(code);
+        codePopup.style.display = 'none';
+    };
+  }
+
+  function generateCode(type) {
+    const num = type === 'Hierarchy' ? hierSelect.value : '';
+    const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
+    return type + (num ? '-' + num : '') + '-' + randomStr;
+  }
+
+function shareCodePrompt(code) {
+  // Create overlay
+  const overlay = document.createElement('div');
+  overlay.style.position = 'fixed';
+  overlay.style.top = '0';
+  overlay.style.left = '0';
+  overlay.style.width = '100%';
+  overlay.style.height = '100%';
+  overlay.style.background = 'rgba(0,0,0,0.5)';
+  overlay.style.display = 'flex';
+  overlay.style.justifyContent = 'center';
+  overlay.style.alignItems = 'center';
+  overlay.style.zIndex = '300';
+
+  // Create popup
+  const popup = document.createElement('div');
+  popup.style.background = 'white';
+  popup.style.padding = '20px';
+  popup.style.borderRadius = '10px';
+  popup.style.width = '350px';
+  popup.style.maxHeight = '400px';
+  popup.style.overflowY = 'auto';
+  popup.style.display = 'flex';
+  popup.style.flexDirection = 'column';
+  popup.style.gap = '10px';
+  popup.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+
+  const title = document.createElement('div');
+  title.textContent = `Share Code: ${code}`;
+  title.style.fontWeight = 'bold';
+  title.style.fontSize = '18px';
+  title.style.textAlign = 'center';
+  popup.appendChild(title);
+
+  const label = document.createElement('label');
+  label.textContent = 'Number of users to share with:';
+  popup.appendChild(label);
+
+  const numInput = document.createElement('input');
+  numInput.type = 'number';
+  numInput.min = 1;
+  numInput.placeholder = 'Enter number';
+  numInput.style.padding = '5px';
+  popup.appendChild(numInput);
+
+  const usernamesContainer = document.createElement('div');
+  usernamesContainer.style.display = 'flex';
+  usernamesContainer.style.flexDirection = 'column';
+  usernamesContainer.style.gap = '5px';
+  usernamesContainer.style.maxHeight = '150px';
+  usernamesContainer.style.overflowY = 'auto';
+  popup.appendChild(usernamesContainer);
+
+  const generateBtn = document.createElement('button');
+  generateBtn.textContent = 'Generate Fields';
+  generateBtn.style.padding = '5px';
+  generateBtn.onclick = () => {
+    usernamesContainer.innerHTML = '';
+    const count = parseInt(numInput.value);
+    if (!count || count < 1) return alert('Enter a valid number');
+    for (let i = 0; i < count; i++) {
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.placeholder = `Username ${i + 1}`;
+      input.style.padding = '5px';
+      usernamesContainer.appendChild(input);
+    }
+  };
+  popup.appendChild(generateBtn);
+
+  const shareBtn = document.createElement('button');
+  shareBtn.textContent = 'Share Code';
+  shareBtn.style.padding = '8px';
+  shareBtn.style.background = '#007bff';
+  shareBtn.style.color = 'white';
+  shareBtn.style.border = 'none';
+  shareBtn.style.borderRadius = '5px';
+  shareBtn.style.cursor = 'pointer';
+  shareBtn.onclick = () => {
+    const usernames = [...usernamesContainer.querySelectorAll('input')]
+      .map(i => i.value.trim())
+      .filter(v => v);
+    if (usernames.length === 0) return alert('Please enter at least one username.');
+    alert(`Code ${code} shared with:\n${usernames.join(', ')}`);
+    document.body.removeChild(overlay);
+    // ✅ Open the editor after sharing
+    window.location.href = "editor.html";
+  };
+  popup.appendChild(shareBtn);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.style.padding = '6px';
+  cancelBtn.style.marginTop = '5px';
+  cancelBtn.onclick = () => document.body.removeChild(overlay);
+  popup.appendChild(cancelBtn);
+
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+}
+
+
+
+</script>
+
+</body>
+</html>

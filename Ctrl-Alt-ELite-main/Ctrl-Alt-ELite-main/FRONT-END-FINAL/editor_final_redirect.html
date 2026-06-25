@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Collaborative Editor & Account Setup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Base styles from accounts.html */
+        @import url('https://fonts.fonts.gstatic.com/s/inter/v13/UuK6WLExY5h3tYmX-O43f2jQyR3V_v4D-Q.woff2');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #eef2ff;
+        }
+        .paths-hidden { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .paths-visible { max-height: 500px; transition: max-height 0.3s ease-in; }
+
+        /* Editor-specific styles from ui.html */
+        #editor-app-wrapper {
+            margin: 0;
+            padding: 0;
+            position: absolute; /* Take over the screen */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10; /* Ensure it covers the accounts screen */
+            background-color: white;
+            font-family: Arial, sans-serif;
+        }
+        #container{display:flex; height:95vh; position:relative;}
+        #editorContainer{flex:7; display:flex; flex-direction:column; margin-right:5px; position:relative;}
+        #chatContainer{flex:3; border-left:1px solid #ccc; display:flex; flex-direction:column;}
+        #chatMessages{flex:1; overflow-y:auto; padding:5px; background:#f9f9f9;}
+        #chatInput{display:flex; border-top:1px solid #ccc;}
+        #chatInput input{flex:1; padding:5px;}
+        #chatInput button{padding:5px;}
+        .message{margin-bottom:5px;}
+        .message .user{font-weight:bold; margin-right:5px;}
+        #toolbar{background:#f2f2f2;padding:5px;display:flex;flex-wrap:wrap;align-items:center;}
+        #toolbar button,#toolbar select,#toolbar input[type=color],#toolbar input[type=number]{margin:2px;padding:5px;}
+        #editor{border:1px solid #ccc;padding:10px;min-height:400px;background:white;overflow:auto;position:relative; flex: 1; /* Make editor take up available space */}
+        #header,#footer{background:#f9f9f9;padding:5px;border-bottom:1px solid #ccc;}
+        #footer{border-top:1px solid #ccc;border-bottom:none;}
+        #statusBar{margin-top:5px;padding:5px;background:#eee;}
+        .checklist{list-style:none;padding-left:0;}
+        .checklist li{display:flex;align-items:center;}
+        .checklist input[type="checkbox"]{margin-right:5px;}
+        #signaturePicker{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);justify-content:center;align-items:center; z-index: 1200;}
+        #signaturePicker div{background:#fff;padding:20px;border-radius:5px; max-width:600px;}
+        .remoteCursor{position:absolute;font-size:12px;font-weight:bold;opacity:0.7;pointer-events:none;z-index:1000;}
+        #cursorContainer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none; z-index: 1000;}
+
+        /* Chat Styles from ui.html */
+        #chatBox {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 320px;
+            height: 100%;
+            background: #fff;
+            border-left: 1px solid #ccc;
+            box-shadow: -2px 0 8px rgba(0,0,0,0.2);
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        #chatBox.show { transform: translateX(0); }
+        #chatHeader { background: #007bff; color: white; padding: 10px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        #chatMessages { flex: 1; padding: 10px; overflow-y: auto; background: #f9f9f9; font-size: 14px; }
+        #chatInputArea { display: flex; border-top: 1px solid #ccc; }
+        #chatInput { border: none; flex: 1; padding: 8px; font-size: 14px; }
+        #chatInput:focus { outline: none; }
+        #chatInputArea button { background: #007bff; color: white; border: none; cursor: pointer; padding: 8px 12px; }
+        #toggleChatBtn {
+            position: fixed; bottom: 20px; right: 20px; width: 55px; height: 55px;
+            border-radius: 50%; background: #007bff; color: white; font-size: 22px;
+            border: none; box-shadow: 0 3px 6px rgba(0,0,0,0.3); cursor: pointer;
+            z-index: 1100; transition: background 0.2s;
+        }
+        #toggleChatBtn:hover { background: #0056b3; }
+        /* Hide the editor chat button until the editor is shown */
+        #toggleChatBtn.hidden { display: none; }
+    </style>
+</head>
+
+<body class="p-4 md:p-8 min-h-screen flex items-start justify-center">
+
+    <div id="accounts-app-container" class="w-full max-w-2xl bg-white shadow-2xl rounded-xl p-8 z-20">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Account and Collaboration Utility</h1>
+        <p class="text-gray-600 mb-6">
+            Sign In or Sign Up to get started. Your username must be unique.
+        </p>
+
+        <div id="rule-warning" class="bg-red-100 border-l-4 border-red-500 text-red-800 p-4 rounded-lg mb-6 shadow">
+            <p class="font-bold">SECURITY RULE WARNING:</p>
+            <p class="text-sm">If you see "missing or insufficient permissions," you MUST update your Firestore Security Rules to allow authenticated users to read/write to the public and private data paths.</p>
+        </div>
+
+        <div id="status-card" class="bg-indigo-50 border-l-4 border-indigo-500 text-indigo-800 p-4 rounded-lg mb-6 shadow">
+            <p id="status-message" class="font-semibold">Initializing Firebase...</p>
+        </div>
+
+        <div id="auth-screen" class="hidden">
+            <div class="flex border-b border-gray-200 mb-6">
+                <button id="tab-sign-in" onclick="showAuthForm('sign-in')" class="px-4 py-2 text-lg font-semibold border-b-2 border-indigo-600 text-indigo-600">Sign In</button>
+                <button id="tab-sign-up" onclick="showAuthForm('sign-up')" class="px-4 py-2 text-lg font-semibold text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300">Sign Up</button>
+            </div>
+
+            <div id="form-sign-in">
+                <h2 class="text-xl font-semibold mb-4">Sign In to Your Account</h2>
+                <input type="email" id="signin-email" placeholder="Email" class="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:ring-indigo-500 focus:border-indigo-500">
+                <input type="password" id="signin-password" placeholder="Password" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-indigo-500 focus:border-indigo-500">
+                <button onclick="signInUser()" class="w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow hover:bg-indigo-700 transition duration-150">Sign In</button>
+            </div>
+
+            <div id="form-sign-up" class="hidden">
+                <h2 class="text-xl font-semibold mb-4">Create a New Account</h2>
+                <input type="text" id="signup-username" placeholder="Choose a Unique Username" 
+                       maxlength="20"
+                       class="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:ring-indigo-500 focus:border-indigo-500">
+                <input type="email" id="signup-email" placeholder="Email Address" class="w-full p-3 border border-gray-300 rounded-lg mb-3 focus:ring-indigo-500 focus:border-indigo-500">
+                <input type="password" id="signup-password" placeholder="Password (min 6 characters)" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-indigo-500 focus:border-indigo-500">
+                <button onclick="signUpUser()" class="w-full px-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow hover:bg-indigo-700 transition duration-150">Sign Up</button>
+            </div>
+        </div>
+
+        <div id="app-screen" class="hidden">
+            <div class="bg-indigo-100 p-4 rounded-lg mb-6 shadow">
+                <p class="text-sm font-medium text-indigo-700">Welcome, Collaborator:</p>
+                <code id="user-display-name" class="block text-2xl font-bold font-mono text-indigo-900">...</code>
+            </div>
+
+            <div class="mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <label for="access-code-input" class="block text-sm font-medium text-yellow-700 mb-2">
+                    Document Access Code (from C Server)
+                </label>
+                <div class="flex space-x-2">
+                    <input 
+                        type="text" 
+                        id="access-code-input" 
+                        placeholder="Enter 11-character EDIT code..."
+                        maxlength="11"
+                        class="flex-grow p-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 font-mono text-gray-800"
+                    >
+                    <button onclick="connectToDocument()" id="connect-button" class="px-4 py-2 bg-yellow-500 text-white font-semibold rounded-lg shadow hover:bg-yellow-600 transition duration-150 disabled:opacity-50" disabled>
+                        Connect & Open Editor
+                    </button>
+                </div>
+                <p id="collaboration-status" class="mt-2 text-sm text-gray-500">Status: Disconnected</p>
+            </div>
+
+            <div class="mb-6">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4 flex justify-between items-center">
+                    <span>Account Details</span>
+                    <button onclick="signOutUser()" class="text-sm text-red-500 hover:text-red-700 transition">Sign Out</button>
+                </h2>
+                
+                <div class="bg-gray-100 p-3 rounded-lg mb-4">
+                    <p class="text-sm font-medium text-gray-500">Firebase User ID (UID):</p>
+                    <code id="user-id" class="block text-lg font-mono text-gray-800 break-all">...</code>
+                </div>
+
+                <div class="mb-4">
+                    <button onclick="togglePathVisibility()" id="path-toggle-button" class="w-full px-4 py-2 bg-gray-200 text-gray-800 font-semibold rounded-lg shadow hover:bg-gray-300 transition duration-150">
+                        Show Firestore Paths &darr;
+                    </button>
+                </div>
+
+                <div id="firestore-paths-container" class="paths-hidden space-y-4">
+                    <div class="bg-gray-100 p-3 rounded-lg">
+                        <p class="text-sm font-medium text-gray-500">Private User Settings Path:</p>
+                        <code id="private-path" class="block text-lg font-mono text-green-700 break-all">/artifacts/<span id="app-id-private">...</span>/users/<span id="user-id-private">...</span>/user_settings/data</code>
+                    </div>
+                    <div class="bg-gray-100 p-3 rounded-lg">
+                        <p class="text-sm font-medium text-gray-500">Public Username Lookup Path:</p>
+                        <code id="public-path" class="block text-lg font-mono text-red-700 break-all">/artifacts/<span id="app-id-public">...</span>/public/data/usernames/<span id="username-lookup-name">username</span></code>
+                    </div>
+                </div>
+
+                <button onclick="saveUserSettings()" class="mt-6 w-full px-4 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow hover:bg-indigo-700 transition duration-150">
+                    Test Save Private Settings
+                </button>
+            </div>
+        </div>
+        
+        <div id="message-box" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 shadow-xl max-w-sm w-full">
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Database Action</h3>
+                <p id="message-content" class="text-gray-600 mb-4">Message content here.</p>
+                <button onclick="hideMessageBox()" class="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <div id="editor-app-wrapper" class="hidden">
+        <div id="container">
+            <div id="editorContainer">
+                <div id="toolbar">
+                    <button id="toggleHeaderBtn">Header</button>
+                    <button id="toggleFooterBtn">Footer</button>
+
+                    <button onclick="document.execCommand('bold',false,null)">B</button>
+                    <button onclick="document.execCommand('italic',false,null)">I</button>
+                    <button onclick="document.execCommand('underline',false,null)">U</button>
+                    <button onclick="document.execCommand('strikeThrough', false, null)" style="font-family:Arial; position: relative;">
+                        <span style="position: relative; display: inline-block; width: 20px; text-align: center;">S
+                            <span style="position: absolute; top: 50%; left: 0; width: 100%; height: 2px; background: black;"></span>
+                        </span>
+                    </button>
+
+                    <button onclick="document.execCommand('undo',false,null)">↺</button>
+                    <button onclick="document.execCommand('redo',false,null)">↻</button>
+
+                    <select onchange="document.execCommand('fontName',false,this.value)">
+                        <option value="Arial">Arial</option>
+                        <option value="Times New Roman">Times New Roman</option>
+                        <option value="Courier New">Courier New</option>
+                        <option value="Verdana">Verdana</option>
+                    </select>
+                    <select onchange="document.execCommand('fontSize',false,this.value)">
+                        <option value="1">8pt</option>
+                        <option value="2">10pt</option>
+                        <option value="3" selected>12pt</option>
+                        <option value="4">14pt</option>
+                        <option value="5">18pt</option>
+                        <option value="6">24pt</option>
+                        <option value="7">36pt</option>
+                    </select>
+
+                    <label id="textColorLabel" title="Text Color" style="position: relative; width: 30px; height: 30px; cursor: pointer;">
+                        <span style="position: absolute; top: 4px; left: 8px; font-weight: bold; font-size: 16px; color: black;">A</span>
+                        <span style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                                background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+                                border-radius: 50%; opacity: 0.8;"></span>
+                        <input type="color" id="textColorPicker" onchange="document.execCommand('foreColor', false, this.value)"
+                            style="opacity:0; position:absolute; top:0; left:0; width:100%; height:100%; cursor:pointer;">
+                    </label>
+
+                    <label id="highlightColorLabel" title="Highlight Color"
+                        style="position: relative; width: 30px; height: 30px; cursor: pointer; display: inline-block;">
+                        <svg viewBox="0 0 64 64" width="28" height="28" style="position:absolute;top:1px;left:1px;">
+                            <path d="M10 50 L54 6 L58 10 L14 54 L10 50 Z" fill="gray"/>
+                            <path id="highlightLine" d="M8 58 H56 V62 H8 Z" fill="#ffff00"/>
+                        </svg>
+                        <input type="color" id="highlightColorPicker"
+                            onchange="document.execCommand('hiliteColor', false, this.value);
+                                    document.getElementById('highlightLine').setAttribute('fill', this.value);"
+                            style="opacity:0; position:absolute; top:0; left:0; width:100%; height:100%; cursor:pointer;">
+                    </label>
+
+                    <label id="pageColorLabel" title="Page Background Color"
+                        style="position: relative; width: 30px; height: 30px; cursor: pointer; display: inline-block;">
+                        <svg viewBox="0 0 64 64" width="28" height="28" style="position:absolute;top:1px;left:1px;">
+                            <rect x="2" y="2" width="60" height="60" rx="3" ry="3"
+                                fill="white" stroke="black" stroke-width="2"></rect>
+                            <rect id="pageGapColor" x="6" y="6" width="52" height="52" rx="2" ry="2"
+                                fill="#ffffff" stroke="none"></rect>
+                        </svg>
+                        <input type="color" id="pageColorPicker"
+                            onchange="document.getElementById('editor').style.backgroundColor=this.value;
+                                    document.getElementById('pageGapColor').setAttribute('fill', this.value);"
+                            style="opacity:0; position:absolute; top:0; left:0; width:100%; height:100%; cursor:pointer;">
+                    </label>
+
+
+                    <select id="alignmentDropdown" title="Alignment">
+                        <option value="">Alignment</option>
+                        <option value="justifyLeft">Left</option>
+                        <option value="justifyCenter">Center</option>
+                        <option value="justifyRight">Right</option>
+                        <option value="justifyFull">Justify</option>
+                    </select>
+
+
+                    <select onchange="document.getElementById('editor').style.lineHeight=this.value">
+                        <option value="1">Single</option>
+                        <option value="1.15">1.15</option>
+                        <option value="1.5">1.5</option>
+                        <option value="2">Double</option>
+                    </select>
+
+                    <select id="paraStyle">
+                        <option value="plain">Plain</option>
+                        <option value="title">Title</option>
+                        <option value="subheading">Subheading</option>
+                        <option value="sub-subheading">Sub-subheading</option>
+                    </select>
+
+                    <select id="listDropdown" title="List">
+                        <option value="">List</option>
+                        <option value="insertUnorderedList">• Bulleted List</option>
+                        <option value="insertOrderedList">1. Numbered List</option>
+                    </select>
+
+                    <button onclick="insertChecklist()">☑ Checklist</button>
+
+                    <select id="shapeSelect">
+                        <option value="">Shape</option>
+                        <option value="rectangle">Rectangle</option>
+                        <option value="circle">Circle</option>
+                        <option value="line">Line</option>
+                    </select>
+
+                    <select id="insertSelect">
+                        <option value="">Insert</option>
+                        <option value="image">Image</option>
+                        <option value="video">Video</option>
+                        <option value="audio">Audio</option>
+                        <option value="link">Link</option>
+                        <option value="table">Table</option>
+                        <option value="chart">Chart</option>
+                    </select>
+
+                    <button onclick="insertSignature()">Digital Sign</button>
+
+                    <select id="symbolsSelect">
+                        <option value="">Symbol</option>
+                        <option value="±">±</option>
+                        <option value="π">π</option>
+                        <option value="√">√</option>
+                        <option value="∑">∑</option>
+                        <option value="→">→</option>
+                        <option value="←">←</option>
+                        <option value="❤️">❤️</option>
+                    </select>
+
+                    <select id="orientationSelect">
+                        <option value="portrait">Portrait</option>
+                        <option value="landscape">Landscape</option>
+                    </select>
+                    <label>Margin:</label>
+                    <select id="marginSide">
+                        <option value="Top">Top</option>
+                        <option value="Bottom">Bottom</option>
+                        <option value="Left">Left</option>
+                        <option value="Right">Right</option>
+                    </select>
+
+                    <select id="marginValue">
+                        <option value="5">5 px</option>
+                        <option value="10" selected>10 px</option>
+                        <option value="15">15 px</option>
+                        <option value="20">20 px</option>
+                        <option value="30">30 px</option>
+                    </select>
+
+
+                    <label>Zoom:</label><input type="range" id="zoomSlider" min="50" max="200" value="100"><span id="zoomValue">100%</span>
+                </div>
+
+                <div id="editor" contenteditable="true"></div>
+                <div id="cursorContainer"></div> <div id="statusBar">Word Count: <span id="wordCount">0</span></div>
+            </div>
+
+            <button id="toggleChatBtn" onclick="toggleChat()" class="hidden">💬</button>
+
+            <div id="chatBox">
+                <div id="chatHeader">
+                    <span>Team Chat</span>
+                    <button id="closeChatBtn" onclick="toggleChat()">✖</button>
+                </div>
+                <div id="chatMessages"></div>
+                <div id="chatInputArea">
+                    <input type="text" id="chatText" placeholder="Type a message...">
+                    <button onclick="sendChat()">Send</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="signaturePicker">
+            <div>
+                <h3>Select Your Signature</h3>
+                <div id="userSignatures" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+                <button onclick="closeSignaturePicker()">Close</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script type="module">
+
+    // --- New Function: Access Code Lookup via HTTP (to C server) ---
+
+    window.lookupAccessCode = async function(code) {
+        // ⚠️ IMPORTANT: Update this URL to match your C server's HTTP endpoint
+        const LOOKUP_URL = "http://localhost:8080/api/lookup_code"; 
+        
+        updateCollaborationStatus("Verifying access code with C server...", 'blue');
+
+        try {
+            const response = await fetch(LOOKUP_URL, {
+                method: 'POST', // Use POST to send the code securely in the body
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access_code: code })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.status === 'success') {
+                updateCollaborationStatus("Code is VALID. User details received.", 'green');
+                return {
+                    valid: true,
+                    perm: result.permission,
+                    path: result.path,
+                    hierarchy: result.hierarchy 
+                };
+            } else {
+                // Server returned 4xx/5xx or a success status with a failure message
+                const errorMsg = result.message || 'Code not found or access denied.';
+                updateCollaborationStatus(`Code lookup failed: ${errorMsg}`, 'red');
+                showMessageBox("Access Denied", errorMsg);
+                return { valid: false };
+            }
+        } catch (error) {
+            updateCollaborationStatus("HTTP Lookup Failed. Is the C server's HTTP service running?", 'red');
+            console.error("Access Code Lookup Error:", error);
+            showMessageBox("Server Error", "Could not connect to the C server for code verification.");
+            return { valid: false };
+        }
+    }
+
+        // --- Configuration Constants ---
+        const C_SERVER_URL = "ws://localhost:7681"; // Must match the port in lws_collab_server.c
+
+        // Firebase configuration for deployment
+        const firebaseConfig = {
+        apiKey: "AIzaSyBQV1x6G3ke1ntZkPlECT43CQK0ghAarDw",
+        authDomain: "text-editor-44f76.firebaseapp.com",
+        projectId: "text-editor-44f76",
+        storageBucket: "text-editor-44f76.firebasestorage.app",
+        messagingSenderId: "517951192421",
+        appId: "1:517951192421:web:c637c49f01fa91cc3ff58c",
+        measurementId: "G-4ZTSLZ5Q8B"
+        };
+
+// App ID for internal document paths
+const appId = firebaseConfig.projectId; 
+const initialAuthToken = null;
+
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithCustomToken, 
+            onAuthStateChanged,
+            createUserWithEmailAndPassword,
+            signInWithEmailAndPassword,
+            signOut
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc,
+            getDoc, 
+            setLogLevel 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        let app, auth;
+        
+        // Expose to window
+        window.db = null;
+        window.userId = null;
+        window.userName = null; // Stores the claimed username
+        window.ws = null; 
+
+        // New global state variables for C server collaboration
+        window.accessCode = null;
+        window.hierarchyLevel = null; // 'A'-'Z' or 0
+
+        // Function to transition to the editor UI
+        window.showEditorScreen = function() {
+            document.getElementById('accounts-app-container').classList.add('hidden');
+            document.getElementById('editor-app-wrapper').classList.remove('hidden');
+            document.getElementById('toggleChatBtn').classList.remove('hidden');
+        }
+
+        // --- UI Helper Functions (from accounts.html) ---
+
+        window.showAuthForm = function(formType) {
+            const forms = { 'sign-in': document.getElementById('form-sign-in'), 'sign-up': document.getElementById('form-sign-up') };
+            const tabs = { 'sign-in': document.getElementById('tab-sign-in'), 'sign-up': document.getElementById('tab-sign-up') };
+
+            for (const type in forms) {
+                forms[type].classList.add('hidden');
+                tabs[type].classList.remove('text-indigo-600', 'border-indigo-600');
+                tabs[type].classList.add('text-gray-500', 'border-transparent');
+            }
+
+            const activeForm = forms[formType];
+            const activeTab = tabs[formType];
+
+            activeForm.classList.remove('hidden');
+            activeTab.classList.add('text-indigo-600', 'border-indigo-600');
+            activeTab.classList.remove('text-gray-500', 'border-transparent');
+        }
+        
+        function showAuthScreen() {
+            document.getElementById('app-screen').classList.add('hidden');
+            document.getElementById('auth-screen').classList.remove('hidden');
+            document.getElementById('editor-app-wrapper').classList.add('hidden');
+            document.getElementById('accounts-app-container').classList.remove('hidden');
+            document.getElementById('toggleChatBtn').classList.add('hidden');
+            window.showAuthForm('sign-in');
+            updateStatus("Please sign in or create an account.", 'yellow');
+        }
+
+        function showAppScreen() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            document.getElementById('user-display-name').textContent = window.userName;
+            updateStatus(`Ready. Logged in as: ${window.userName}`, 'green');
+        }
+
+        window.togglePathVisibility = function() {
+            const container = document.getElementById('firestore-paths-container');
+            const button = document.getElementById('path-toggle-button');
+            
+            const isHidden = container.classList.contains('paths-hidden');
+
+            if (isHidden) {
+                container.classList.remove('paths-hidden');
+                container.classList.add('paths-visible');
+                button.innerHTML = 'Hide Firestore Paths &uarr;';
+            } else {
+                container.classList.remove('paths-visible');
+                container.classList.add('paths-hidden');
+                button.innerHTML = 'Show Firestore Paths &darr;';
+            }
+        }
+
+        function updateStatus(message, color = 'indigo') {
+            const card = document.getElementById('status-card');
+            card.className = `bg-${color}-50 border-l-4 border-${color}-500 text-${color}-800 p-4 rounded-lg mb-6 shadow`;
+            document.getElementById('status-message').textContent = message;
+        }
+
+        function updateCollaborationStatus(message, color = 'gray') {
+            const statusEl = document.getElementById('collaboration-status');
+            statusEl.textContent = `Status: ${message}`;
+            statusEl.className = `mt-2 text-sm text-${color}-500`;
+        }
+
+        function showMessageBox(title, content) {
+            document.getElementById('message-box').classList.remove('hidden');
+            document.getElementById('message-box').classList.add('flex');
+            document.getElementById('message-content').innerHTML = `<strong>${title}:</strong> ${content}`;
+        }
+
+        window.hideMessageBox = function() {
+            document.getElementById('message-box').classList.add('hidden');
+            document.getElementById('message-box').classList.remove('flex');
+        }
+
+
+        // --- Username Lookup Logic ---
+        window.getPublicUsernameLookupPath = function(username) {
+            return `artifacts/${appId}/public/data/usernames/${username.toLowerCase()}`;
+        }
+
+        // --- Authentication Logic ---
+
+        window.signUpUser = async function() {
+            const username = document.getElementById('signup-username').value.trim();
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+
+            // 1. Input Validation (omitted for brevity, assume valid for merge)
+            if (!username || !email || !password || password.length < 6) { showMessageBox("Sign Up Failed", "Please check fields."); return; }
+            if (!/^[a-zA-Z0-9_.-]+$/.test(username)) { showMessageBox("Setup Failed", "Username invalid."); return; }
+
+            updateStatus(`Checking username '${username}' and creating account...`, 'blue');
+
+            try {
+                // 2. Check Uniqueness (Public Lookup)
+                const lookupPath = window.getPublicUsernameLookupPath(username);
+                const lookupDocRef = doc(window.db, lookupPath);
+                const lookupSnapshot = await getDoc(lookupDocRef);
+
+                if (lookupSnapshot.exists()) {
+                    showMessageBox("Sign Up Failed", `The username <strong>${username}</strong> is already taken. Please try another.`);
+                    updateStatus("Username check failed.", 'red');
+                    return;
+                }
+
+                // 3. Create Firebase Auth Account
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const uid = userCredential.user.uid;
+
+                // 4. Claim Username (Public Write)
+                await setDoc(lookupDocRef, { claimed_by: uid, created_at: new Date().toISOString() }, { merge: false });
+
+                // 5. Update Private User Settings (Private Write)
+                const settingsPath = window.getPrivateUserDocPath(uid, 'user_settings');
+                const settingsDocRef = doc(window.db, settingsPath);
+                await setDoc(settingsDocRef, { username: username, email: email, is_setup: true, last_active: new Date().toISOString() }, { merge: true });
+
+                showMessageBox("Success!", `Account created for <strong>${username}</strong> (${email}).`);
+                // onAuthStateChanged will fire upon successful sign-up and handle the UI update
+            } catch (error) {
+                showMessageBox("Sign Up Error", error.message);
+                console.error("Sign Up Error:", error);
+                updateStatus("Sign up failed.", 'red');
+            }
+        }
+
+        window.signInUser = async function() {
+            const email = document.getElementById('signin-email').value;
+            const password = document.getElementById('signin-password').value;
+
+            if (!email || !password) { showMessageBox("Sign In Failed", "Please enter both email and password."); return; }
+            updateStatus("Signing in...", 'indigo');
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+            } catch (error) {
+                showMessageBox("Sign In Error", error.message);
+                console.error("Sign In Error:", error);
+                updateStatus("Sign in failed.", 'red');
+            }
+        }
+
+        window.signOutUser = async function() {
+            updateStatus("Signing out...", 'yellow');
+            // Hide editor before signing out to prevent errors
+            document.getElementById('editor-app-wrapper').classList.add('hidden');
+            document.getElementById('toggleChatBtn').classList.add('hidden');
+            await signOut(auth);
+            showMessageBox("Signed Out", "You have been successfully signed out.");
+        }
+
+
+        // --- Firestore Path Helper (Exposed) and Save Example ---
+
+        window.getPrivateUserDocPath = function(uid, collectionName) {
+            return `artifacts/${appId}/users/${uid}/${collectionName}/data`;
+        }
+
+        window.saveUserSettings = async function() {
+            if (!window.db || !window.userId) { showMessageBox("Save Error", "Database or User ID not ready. Please sign in."); return; }
+            
+            const userSettingsPath = window.getPrivateUserDocPath(window.userId, 'user_settings');
+            const userDocRef = doc(window.db, userSettingsPath);
+            const timestamp = new Date().toISOString();
+
+            try {
+                await setDoc(userDocRef, { last_active: timestamp, theme: 'dark', username: window.userName, save_interval_ms: 5000 }, { merge: true });
+                showMessageBox("Success (Private Save)", `Settings saved to private path: <code>${userSettingsPath}</code>`);
+            } catch (error) {
+                showMessageBox("Save Error (Private)", `Failed to save settings: ${error.message}`);
+                console.error("Firestore Save Error (Private):", error);
+            }
+        }
+
+
+        // --- WebSocket Logic ---
+
+// --- Updated WebSocket Logic ---
+
+    window.connectToDocument = async function() { // IMPORTANT: Make function async
+        if (!window.userName) { updateCollaborationStatus("Username not loaded.", 'red'); return; }
+        if (window.ws && window.ws.readyState === WebSocket.OPEN) { window.showEditorScreen(); return; } 
+        
+        const code = document.getElementById('access-code-input').value.trim();
+        if (code.length < 11) { updateCollaborationStatus("Please enter a valid access code (min 11 chars)", 'red'); return; }
+        
+        // --- STEP 1: HTTP Lookup (New) ---
+        const lookupResult = await window.lookupAccessCode(code);
+        
+        if (!lookupResult.valid) {
+            // Stop if the code is invalid or the lookup failed
+            return; 
+        }
+        
+        // Store validated C server data globally
+        window.accessCode = code;
+        // window.hierarchyLevel will be confirmed again in the WS AUTH_SUCCESS step
+        
+        // --- STEP 2: WebSocket Connection (Existing Logic Modified) ---
+        updateCollaborationStatus(`Access granted by HTTP. Attempting WebSocket connection to ${C_SERVER_URL}...`, 'blue');
+
+        try {
+            window.ws = new WebSocket(C_SERVER_URL, 'editor-protocol');
+            
+            window.ws.onopen = () => {
+                updateCollaborationStatus("Connected to C server. Sending final authentication handshake.", 'green');
+                // Include the hierarchy and permissions data from the HTTP lookup if needed by the C server
+                const handshakePayload = JSON.stringify({
+                    type: "ACCESS_CODE_CHECK", 
+                    code: window.accessCode, 
+                    user_id: window.userId, 
+                    username: window.userName,
+                    perm: lookupResult.perm, // Send data obtained from HTTP lookup
+                    path: lookupResult.path 
+                });
+                window.ws.send(handshakePayload);
+            };
+            // ... (ws.onmessage, ws.onclose, ws.onerror remain the same)
+            // ... (Keep the rest of the existing function body)
+
+            window.ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === "AUTH_SUCCESS") {
+                        window.hierarchyLevel = data.hierarchy; 
+                        updateCollaborationStatus(`Authenticated: Hierarchy ${data.hierarchy}. Ready to edit.`, 'green');
+                        window.showEditorScreen(); // <--- Transition to the editor UI after successful C server auth
+                        document.dispatchEvent(new CustomEvent('collab_ready', { detail: { code: window.accessCode, hierarchy: data.hierarchy }}));
+                    } else if (data.type === "AUTH_FAILURE") {
+                        window.hierarchyLevel = null;
+                        updateCollaborationStatus(`Code failed: ${data.message}`, 'red');
+                        showMessageBox("Authentication Failed", data.message);
+                    } else if (data.type === "LIVE_EDIT") {
+                        console.log("Received live edit from server:", data);
+                        // Add logic here to apply the live edit to the editor content
+                    } else if (data.type === "CHAT_MESSAGE") {
+                        // Add logic here to display the chat message
+                        messages.push({ user: data.username, text: data.text });
+                        renderMessages();
+                    }
+                } catch (e) {
+                    console.error("Error parsing C server message:", e, event.data);
+                }
+            };
+
+        window.ws.onclose = () => { updateCollaborationStatus("Disconnected from C server.", 'red'); window.ws = null; window.hierarchyLevel = null; };
+        window.ws.onerror = (error) => { updateCollaborationStatus("Connection Error. Is the C server running?", 'red'); console.error("WebSocket Error:", error); };
+
+    } catch (error) {
+        updateCollaborationStatus("Failed to establish WebSocket.", 'red');
+        console.error("WebSocket Initialization Error:", error);
+    }
+};
+
+        window.submitEditToCServer = function(lineNumber, newContent) {
+            if (!window.ws || window.ws.readyState !== WebSocket.OPEN || !window.accessCode || !window.hierarchyLevel) {
+                 console.error("Cannot submit edit: Connection/Auth not established."); return false;
+            }
+            const editPayload = JSON.stringify({
+                type: "SUBMIT_EDIT", code: window.accessCode, line_num: lineNumber, new_text: newContent
+            });
+            window.ws.send(editPayload);
+            console.log(`Submitted edit for line ${lineNumber} to C server.`);
+            return true;
+        };
+        
+
+        // --- Main Initialization Function ---
+
+        async function initializeFirebase() {
+            if (!firebaseConfig) { updateStatus("Error: Firebase configuration is missing.", 'red'); return; }
+
+            try {
+                setLogLevel('Debug');
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                window.db = getFirestore(app);
+
+                updateStatus("Firebase connection established. Checking user status...", 'indigo');
+
+                if (initialAuthToken) {
+                    updateStatus("Signing in with environment token...", 'indigo');
+                    await signInWithCustomToken(auth, initialAuthToken);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+        // ✅ Immediately redirect to home page after sign-in
+        window.location.href = 'home.html';
+        return;
+                        window.userId = user.uid;
+                        
+                        const settingsPath = window.getPrivateUserDocPath(user.uid, 'user_settings');
+                        const settingsDocRef = doc(window.db, settingsPath);
+                        const settingsSnapshot = await getDoc(settingsDocRef);
+                        const userData = settingsSnapshot.data();
+
+                        if (userData && userData.username) {
+                            window.userName = userData.username;
+                            // Update UI elements from accounts.html
+                            document.getElementById('user-id').textContent = window.userId;
+                            document.getElementById('app-id-private').textContent = appId;
+                            document.getElementById('user-id-private').textContent = window.userId;
+                            document.getElementById('app-id-public').textContent = appId;
+                            document.getElementById('username-lookup-name').textContent = window.userName.toLowerCase();
+                            
+                            showAppScreen();
+                            document.getElementById('connect-button').disabled = false;
+                            
+                            document.dispatchEvent(new Event('auth_ready'));
+                        } else {
+                            window.userName = 'Guest (Username Missing)';
+                            showAppScreen();
+                            showMessageBox("Setup Warning", "Could not retrieve your username. Please try signing out and back in.");
+                            document.getElementById('connect-button').disabled = false;
+                        }
+
+                    } else {
+                        window.userId = null;
+                        document.getElementById('connect-button').disabled = true;
+                        showAuthScreen();
+                    }
+                });
+
+            } catch (error) {
+                updateStatus(`Firebase initialization error: ${error.message}`, 'red');
+                console.error("Firebase Initialization Error:", error);
+            }
+        }
+
+        
+        // Start the application
+        initializeFirebase();
+    </script>
+
+
+    <script>
+        // ---------------- VARIABLES ----------------
+        const editor = document.getElementById('editor');
+        // currentUser will be set globally by the Firebase script as window.userName
+        let drawingShape = null;
+        let startX = 0, startY = 0;
+        let currentShapeType = null;
+        const chatMessages = document.getElementById('chatMessages');
+        const chatInput = document.getElementById('chatText');
+        let messages = [];
+
+        // Dummy signature DB (use a placeholder until a real DB is integrated)
+        const signaturesDB = { "alice":["sign1.png"], "bob":["bobSign.png"] };
+        let selectedSignature = null;
+
+        // ---------------- EDITOR UI LOGIC ----------------
+
+        document.getElementById('listDropdown').addEventListener('change', function() {
+            const cmd = this.value; if(cmd) document.execCommand(cmd, false, null); this.value = "";
+        });
+
+        document.getElementById('alignmentDropdown').addEventListener('change', function() {
+            const cmd = this.value; if(cmd) document.execCommand(cmd, false, null); this.value = "";
+        });
+
+        function insertHeader() {
+            if(document.getElementById('header')) return;
+            const header = document.createElement('div');
+            header.id = 'header'; header.contentEditable = true; header.innerText = 'Header';
+            header.style.borderBottom = '1px solid #ccc'; header.style.padding = '5px';
+            header.style.backgroundColor = '#f9f9f9'; editor.parentNode.insertBefore(header, editor);
+        }
+
+        function insertFooter() {
+            if(document.getElementById('footer')) return;
+            const footer = document.createElement('div');
+            footer.id = 'footer'; footer.contentEditable = true;
+            footer.innerHTML = 'Footer - Page <span id="pageNumber">1</span>';
+            footer.style.borderTop = '1px solid #ccc'; footer.style.padding = '5px';
+            footer.style.backgroundColor = '#f9f9f9'; editor.parentNode.appendChild(footer);
+        }
+
+        document.getElementById('toggleHeaderBtn').addEventListener('click', () => {
+            let header = document.getElementById('header');
+            if(!header) insertHeader();
+            else header.style.display = (header.style.display==='none') ? 'block' : 'none';
+        });
+
+        document.getElementById('toggleFooterBtn').addEventListener('click', () => {
+            let footer = document.getElementById('footer');
+            if(!footer) insertFooter();
+            else footer.style.display = (footer.style.display==='none') ? 'block' : 'none';
+        });
+
+        // ---------------- WORD COUNT ----------------
+        function updateWordCount(){document.getElementById('wordCount').innerText=editor.innerText.trim().split(/\s+/).filter(w=>w.length>0).length;}
+        editor.addEventListener('input',updateWordCount); updateWordCount();
+
+
+        // ---------------- SHAPE DRAWING ----------------
+        editor.addEventListener('mousedown', e => {
+            if (!currentShapeType) return;
+            startX = e.offsetX; startY = e.offsetY;
+            drawingShape = document.createElement('div');
+            drawingShape.style.position = 'absolute'; drawingShape.style.left = startX + 'px';
+            drawingShape.style.top = startY + 'px'; drawingShape.style.backgroundColor = '#ccc';
+            drawingShape.style.border = '1px solid #000'; drawingShape.style.pointerEvents = 'none';
+
+            if(currentShapeType === 'circle') drawingShape.style.borderRadius = '50%';
+            if(currentShapeType === 'line') drawingShape.style.height = '2px';
+            editor.appendChild(drawingShape);
+
+            const mouseMoveHandler = evt => {
+                const width = evt.offsetX - startX; const height = evt.offsetY - startY;
+                drawingShape.style.width = Math.abs(width) + 'px';
+                if(currentShapeType !== 'line') drawingShape.style.height = Math.abs(height) + 'px';
+                if(width < 0) drawingShape.style.left = evt.offsetX + 'px';
+                if(height < 0 && currentShapeType !== 'line') drawingShape.style.top = evt.offsetY + 'px';
+            };
+
+            const mouseUpHandler = () => {
+                editor.removeEventListener('mousemove', mouseMoveHandler);
+                editor.removeEventListener('mouseup', mouseUpHandler);
+                drawingShape.style.pointerEvents = 'auto'; drawingShape = null;
+                // currentShapeType = null; document.getElementById('shapeSelect').value = '';
+            };
+
+            editor.addEventListener('mousemove', mouseMoveHandler);
+            editor.addEventListener('mouseup', mouseUpHandler);
+        });
+
+        // ---------------- PARAGRAPH STYLE ----------------
+        document.getElementById('paraStyle').addEventListener('change', ()=>{
+            let style=document.getElementById('paraStyle').value;
+            let size,weight;
+            switch(style){case'title':size='24px';weight='bold';break;case'subheading':size='18px';weight='bold';break;case'sub-subheading':size='14px';weight='600';break;default:size='12px';weight='normal';}
+            let selection=window.getSelection();
+            if(selection.rangeCount>0){
+                let range=selection.getRangeAt(0);
+                if(!range.collapsed){
+                    let span=document.createElement('span');
+                    span.style.fontSize=size;span.style.fontWeight=weight;
+                    span.appendChild(range.extractContents());
+                    range.insertNode(span);
+                }
+            }
+            editor.focus();
+        });
+
+        // ---------------- SYMBOLS ----------------
+        document.getElementById('symbolsSelect').addEventListener('change', ()=>{
+            let val=document.getElementById('symbolsSelect').value;
+            if(val) document.execCommand('insertHTML',false,val);
+            document.getElementById('symbolsSelect').value='';
+        });
+        
+        // ---------------- SHAPES ----------------
+        document.getElementById('shapeSelect').addEventListener('change', e => {
+            currentShapeType = e.target.value;
+            editor.style.cursor = currentShapeType ? 'crosshair' : 'text';
+        });
+
+        // ---------------- INSERT DROPDOWN ----------------
+        document.getElementById('insertSelect').addEventListener('change', function() {
+            const val = this.value;
+            switch(val){
+                case 'image': insertImage(); break;
+                case 'video': insertVideo(); break;
+                case 'audio': insertAudio(); break;
+                case 'link': insertLink(); break;
+                case 'table': insertTable(); break;
+                case 'chart': insertChart(); break;
+            }
+            this.value = ''; // reset dropdown
+        });
+
+        // ---------------- CHECKLIST ----------------
+        function insertChecklist(){let selection=window.getSelection(); if(selection.rangeCount>0){let range=selection.getRangeAt(0); const li=document.createElement('li'); const cb=document.createElement('input'); cb.type='checkbox'; li.appendChild(cb); li.appendChild(range.extractContents()); const ul=document.createElement('ul'); ul.className='checklist'; ul.appendChild(li); range.insertNode(ul);}}
+
+        // ---------------- MEDIA ----------------
+        function insertLink(){let url=prompt('URL'); if(url) document.execCommand('createLink',false,url);}
+        function insertImage(){let url=prompt('Image URL'); if(url){let floatOption=prompt('Float? left,right,none','none'); let html=`<img src="${url}" style="max-width:300px;${floatOption!=='none'?`float:${floatOption};margin:5px;`:""}">`; document.execCommand('insertHTML',false,html);}}
+        function insertAudio(){let url=prompt('Audio URL'); if(url) document.execCommand('insertHTML',false,`<audio controls src="${url}" style="max-width:300px;"></audio>`);}
+        function insertVideo(){let url=prompt('MP4 URL'); if(url) document.execCommand('insertHTML',false,`<video controls width="360"><source src="${url}" type="video/mp4"></video>`);}
+        
+        // ---------------- DIGITAL SIGN ----------------
+        function insertSignature() {
+            const url = prompt("Enter Signature URL or leave blank to upload:");
+            if (url) {
+                placeSignatureFromURL(url);
+            } else {
+                const fileInput = document.createElement("input");
+                fileInput.type = "file"; fileInput.accept = "image/*";
+                fileInput.onchange = function() {
+                    const file = fileInput.files[0]; if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = function(e) { placeSignatureFromURL(e.target.result); };
+                    reader.readAsDataURL(file);
+                };
+                fileInput.click();
+            }
+        }
+
+        function placeSignatureFromURL(src) {
+            const img = document.createElement("img");
+            img.src = src; img.style.maxWidth = "150px"; img.style.position = "absolute";
+
+            alert("Click anywhere in the editor to place your signature.");
+            editor.style.cursor = "crosshair";
+
+            function place(e) {
+                const rect = editor.getBoundingClientRect();
+                img.style.left = (e.clientX - rect.left) + "px";
+                img.style.top = (e.clientY - rect.top) + "px";
+                editor.appendChild(img);
+                editor.style.cursor = "text";
+                editor.removeEventListener("click", place);
+            }
+            editor.addEventListener("click", place);
+        }
+
+        // ---------------- TABLE ----------------
+        function insertTable(){let rows=prompt('Rows',2),cols=prompt('Cols',2); if(rows&&cols){let html='<table border="1" style="border-collapse:collapse;">'; for(let r=0;r<rows;r++){html+='<tr>';for(let c=0;c<cols;c++){html+='<td>&nbsp;&nbsp;&nbsp;</td>'} html+='</tr>'} html+='</table><br>'; document.execCommand('insertHTML',false,html);}}
+
+        // ---------------- CHART ----------------
+        function insertChart(){let type=prompt('Chart type (bar,line,pie)','bar'); let labels=prompt('Comma-separated labels','Jan,Feb,Mar').split(','); let data=prompt('Comma-separated values','10,20,30').split(',').map(Number); let cid='chart'+Date.now(); let html=`<canvas id="${cid}" width="400" height="300"></canvas>`; document.execCommand('insertHTML',false,html); setTimeout(()=>{new Chart(document.getElementById(cid).getContext('2d'),{type:type,data:{labels:labels,datasets:[{label:'Dataset',data:data,backgroundColor:'rgba(0,123,255,0.5)'}]}});},100);}
+
+        // ---------------- MARGINS & ORIENTATION ----------------
+        const margins = { Top: 10, Bottom: 10, Left: 10, Right: 10 };
+        const marginSide = document.getElementById('marginSide');
+        const marginValue = document.getElementById('marginValue');
+
+        function updateEditorMargins() {
+            editor.style.padding = `${margins.Top}px ${margins.Right}px ${margins.Bottom}px ${margins.Left}px`;
+        }
+
+        marginSide.addEventListener('change', () => { marginValue.value = margins[marginSide.value]; });
+        marginValue.addEventListener('change', () => { margins[marginSide.value] = parseInt(marginValue.value); updateEditorMargins(); });
+        updateEditorMargins();
+
+        // ---------------- ZOOM ----------------
+        const zoomSlider=document.getElementById('zoomSlider'); const zoomValue=document.getElementById('zoomValue');
+        zoomSlider.addEventListener('input',()=>{editor.style.transform=`scale(${zoomSlider.value/100})`; editor.style.transformOrigin='top left'; zoomValue.innerText=zoomSlider.value+'%';});
+
+        // ---------------- CHAT ----------------
+        function toggleChat() {
+            const chatBox = document.getElementById("chatBox");
+            chatBox.classList.toggle("show");
+        }
+
+        function renderMessages(){chatMessages.innerHTML=''; messages.forEach(msg=>{const div=document.createElement('div'); div.className='message'; div.innerHTML=`<span class="user">${msg.user}:</span> ${msg.text}`; chatMessages.appendChild(div);}); chatMessages.scrollTop=chatMessages.scrollHeight;}
+        
+        function sendChat(){
+            const text=chatInput.value.trim();
+            if(!text) return;
+            // Use global window.userName from accounts.html
+            messages.push({user: window.userName || 'Unknown User', text});
+            chatInput.value='';
+            renderMessages();
+            // TODO: Send chat message over WebSocket
+        }
+        renderMessages();
+
+        // ---------------- DIGITAL SIGN (Picker related) ----------------
+        function openSignaturePicker(){
+            const container=document.getElementById("userSignatures"); container.innerHTML="";
+            const userSigns=signaturesDB[window.userName ? window.userName.toLowerCase() : 'alice']||[]; // Dummy logic
+            userSigns.forEach(url=>{
+                const img=document.createElement("img"); img.src=url; img.style.width="100px"; img.style.cursor="pointer";
+                img.onclick=()=>{selectedSignature=url; closeSignaturePicker(); enableStampPlacement();};
+                container.appendChild(img);
+            });
+            document.getElementById("signaturePicker").style.display="flex";
+        }
+        function closeSignaturePicker(){document.getElementById("signaturePicker").style.display="none";}
+        function enableStampPlacement(){if(!selectedSignature) return; alert("Click anywhere in the editor to place your signature."); editor.style.cursor="crosshair"; editor.addEventListener("click",placeSignatureStamp);}
+        function placeSignatureStamp(e){const rect=editor.getBoundingClientRect(); const x=e.clientX-rect.left; const y=e.clientY-rect.top; const img=document.createElement("img"); img.src=selectedSignature; img.style.position="absolute"; img.style.left=x+"px"; img.style.top=y+"px"; img.style.maxWidth="150px"; img.style.pointerEvents="none"; editor.appendChild(img); editor.style.cursor="text"; selectedSignature=null; editor.removeEventListener("click",placeSignatureStamp);}
+        
+        // ---------------- CURSOR PRESENCE ----------------
+        const cursorContainer=document.getElementById('cursorContainer');
+        const userColors={}; const remoteCursors={};
+        function getUserColor(username){if(!userColors[username]){const colors=['red','green','blue','orange','purple','teal','brown'];userColors[username]=colors[Object.keys(userColors).length%colors.length];} return userColors[username];}
+        function updateRemoteCursor(username,x,y){remoteCursors[username]={x,y}; renderCursors();}
+        function renderCursors(){cursorContainer.innerHTML=''; for(const [user,pos] of Object.entries(remoteCursors)){if(user===window.userName) continue; const div=document.createElement('div'); div.className='remoteCursor'; div.style.color=getUserColor(user); div.style.left=pos.x+'px'; div.style.top=pos.y+'px'; div.innerText=user; cursorContainer.appendChild(div);}}
+        editor.addEventListener('mouseup',sendCursorPosition);
+        editor.addEventListener('keyup',sendCursorPosition);
+        function sendCursorPosition(){
+            const selection=window.getSelection(); if(selection.rangeCount===0) return;
+            const range=selection.getRangeAt(0).cloneRange();
+            const rect=range.getBoundingClientRect();
+            const editorRect=editor.getBoundingClientRect();
+            const x=rect.left-editorRect.left;
+            const y=rect.top-editorRect.top;
+            /* send to server */
+        }
+    </script>
+</body>
+</html>
