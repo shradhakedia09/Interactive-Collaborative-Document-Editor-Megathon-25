@@ -65,6 +65,7 @@ https://text-editor-44f76.web.app/
 ---
 
 ##  Workflow
+![Editor Workflow](images/editor_screenshot.png)
 
 ### Access Existing Documents
 
