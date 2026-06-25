@@ -1,36 +1,146 @@
-Module status: complete
-Integration status: incomplete
+# Interactive Collaborative Document Editor
 
-Steps Left For Integration:
-1. Fix redirect from sign in page to home: enable the redirecttoHome() function in editor.html
-2. Fix redirect from home to editing window: enable the redirecttoEdit() option in editor.html
-3. Enable hierarchy doc formation : enable firebase user system integraton in editor.html
-4. Initiate automatic web socket connection upon use : initiate websocket formatin from backend.c through prompt in editor.html
+A web-based collaborative document editor designed to support multi-user document creation, sharing, and editing through a flexible access-control system.
 
-USAGE RULES:
-1. Sign IN/SIgn Out Page: authenticates users, allows joining multi-user document,etc
-2. Home Page: login redirects to home page, which houses main menu for file opening, editing, etc
-3. Editing WIndow: the editing window allows the docuemtn to be edited
+The project enables users to create documents, share them using access codes, manage viewing and editing permissions, and collaborate through a rich-text editing environment. It also introduces a hierarchical permission model for conflict resolution and document ownership management.
 
-Website link: https://text-editor-44f76.web.app/
+##  Live Demo
 
-Our features include:
-1) Creat new document
-2) View previous documents
-3) Enter access code (to edit/view a document)
-4) Revoke access code (can be done by the owner of the document only)
+https://text-editor-44f76.web.app/
 
-   
-The features of our text editor are:
-1)New file, Account, Save, Print
-2)Header,Footer, B,I,U,St, Undo, Redo,Font Type & Size
-3)Text Colour, Highlight Colour, Page Colour
-4)Alignment, Line Spacing, Paragraph Format, Lists, Check list.
-5)Digital Sign
-6)Insert Image, Video, Audio, Links, Table, Chart, shapes, symbols
-7)Origin, Margin, zoom in
-8)Word Count
+---
 
+##  Features
 
-The flowchart below explains the working.
-![Rich Text Editor Screenshot](images/editor_screenshot.png)
+### 📄 Document Management
+
+* Create new documents
+* Open and view existing documents
+* Save and manage document content
+* Access document history
+
+###  Access Control System
+
+* Access-code-based document sharing
+* Separate View and Edit permissions
+* Owner-controlled access revocation
+* Permission validation before document access
+
+###  Rich Text Editing
+
+* Bold, Italic, Underline, Strikethrough
+* Undo and Redo
+* Font type and size controls
+* Text color and highlight color
+* Page color customization
+* Alignment and paragraph formatting
+* Lists and checklists
+* Header and footer support
+
+### 📎 Content Insertion
+
+* Images
+* Videos
+* Audio files
+* Hyperlinks
+* Tables
+* Charts
+* Shapes and symbols
+* Digital signatures
+
+###  Additional Utilities
+
+* Margin controls
+* Zoom controls
+* Word count
+* Print support
+
+###  Hierarchical Permission Model
+
+* Owner-defined hierarchy levels
+* Separate View and Edit access codes
+* Priority-based conflict handling
+* Access revocation by document owner
+
+---
+
+##  Workflow
+
+### Access Existing Documents
+
+1. User enters an access code.
+2. The system validates the code.
+3. The system checks whether access has been revoked.
+4. Based on permission type:
+
+   * View access is granted.
+   * Edit access is granted.
+
+### Create New Documents
+
+1. User creates a new document.
+2. The system generates:
+
+   * View Code
+   * Edit Code
+3. Users can share these codes with collaborators.
+4. The owner manages permissions and access levels.
+
+### Conflict Resolution
+
+#### General Mode
+
+* If multiple users edit the same line, a priority system determines which changes are reflected.
+
+#### Hierarchical Mode
+
+* Users are assigned hierarchy levels.
+* Higher-priority edits take precedence during conflicts.
+* Priority tables are periodically regenerated for fairness among users at the same hierarchy level.
+
+---
+
+##  Tech Stack
+
+* HTML
+* CSS
+* JavaScript
+* Firebase
+* WebSockets (integration in progress)
+
+---
+
+## 📊 Flowchart
+
+The workflow and access-control architecture are illustrated in the project flowchart.
+
+---
+
+##  Integration Status
+
+### Completed
+
+* Authentication interface
+* Home page and editor interface
+* Access-code workflow
+* Document creation system
+* Rich-text editing features
+* Permission management framework
+* Hierarchical access design
+
+### Under Integration
+
+* Firebase user-system integration
+* Automatic page routing
+* WebSocket-based synchronization
+* Real-time collaborative editing
+* Backend-editor communication
+
+---
+
+##  Contributors
+
+* Shradha Kedia
+* Aratrika Roy
+* Malini Goyal
+* Stuti Prajapati
