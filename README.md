@@ -12,7 +12,7 @@ https://text-editor-44f76.web.app/
 
 ##  Features
 
-### 📄 Document Management
+###  Document Management
 
 * Create new documents
 * Open and view existing documents
@@ -37,7 +37,7 @@ https://text-editor-44f76.web.app/
 * Lists and checklists
 * Header and footer support
 
-### 📎 Content Insertion
+###  Content Insertion
 
 * Images
 * Videos
@@ -111,7 +111,7 @@ https://text-editor-44f76.web.app/
 
 ---
 
-## 📊 Flowchart
+##  Flowchart
 
 The workflow and access-control architecture are illustrated in the project flowchart.
 
